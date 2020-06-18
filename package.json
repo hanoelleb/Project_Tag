@@ -16,6 +16,7 @@
     "webpack-cli": "^3.3.11"
   },
   "dependencies": {
-    "firebase": "^7.15.1"
+    "firebase": "^7.15.1",
+    "timer-stopwatch": "^0.2.0"
   }
 }

@@ -2,6 +2,8 @@ import './style.css';
 import pic from './resources/waldo.jpg';
 import * as firebase from 'firebase';
 
+import {charLocation} from './location';
+
 import waldo from './resources/waldo.png';
 import wilma from './resources/wilma.png';
 import odlaw from './resources/odlaw.png';
@@ -24,11 +26,17 @@ var database = firebase.database();
 
 var stopwatch;
 var targetBox = document.createElement('div');
+var currentX = 0;
+var currentY = 0;
+
+var locations = [];
 
 function addPic() {
     var content = document.getElementById('content');
     
     var img = document.createElement('img');
+    img.id = 'page';
+    img.style.cssText = 'z-index: 5';
     img.src = pic;
     img.addEventListener('click', photoClick);
     content.appendChild(img);
@@ -43,15 +51,9 @@ function photoClick(e) {
     targetBox.style.marginLeft = (xPos - offset) + 'px';
     targetBox.style.marginTop = (yPos - offset) + 'px';
     targetBox.style.display = 'flex';
-    /*
-    if (e)
-    {
-        //FireFox
-        xPos = mouseEvent.screenX;
-        yPos = mouseEvent.screenY;
-    } */
     
-    console.log('x: ' + xPos + ' y: ' + yPos);
+    currentX = xPos;
+    currentY = yPos;
 }
 
 function makeCharacterBanner(container) {
@@ -105,11 +107,47 @@ function makeTarget(container) {
     var dropdown = document.createElement('div');
     dropdown.style.cssText = 'display: flex; flex-direction: column;'
     var names =  ['Waldo', 'Wilma', 'Odlaw', 'Wizard', 'Woof'];
+
     for (var i = 0; i < names.length; i++) {
+	const index = i;
         var charBtn = document.createElement('button');
+	charBtn.id = names[i].toLowerCase() + 'btn';
 	charBtn.innerHTML = names[i];
 	charBtn.style.cssText = 'color: white; background-color: red; border: 2px solid white;'
 	//todo: add button functionality/event listener
+	charBtn.addEventListener('click', () => {
+	   var lookup = names[index].toLowerCase();
+	   console.log('lookup: ' + lookup);
+	   for (var i = 0; i < locations.length; i++) {
+	       if (lookup === locations[i].name) {
+		   const offset = 40;
+		   var answerX = locations[i].xPos;
+		   var answerY = locations[i].yPos;
+		   
+		   var x = Math.abs(currentX - answerX);
+		   var y = Math.abs(currentY - answerY);
+
+		   console.log('answer: ' + answerX + ' current: ' + currentX + ' x: ' + x);
+
+		   if (x <= 25 && y <= 50) {
+		       console.log('found ' + lookup);
+		       document.getElementById(lookup+'btn').style.display = 'none';
+
+		       var found = document.createElement('div');
+                       document.getElementById('content').appendChild(found);
+
+		       var charBox = document.createElement('div');
+		       charBox.id = lookup+'found';
+		    
+		       var getX = 'left: ' + (answerX - offset) + 'px;';
+		       var getY = 'top: ' + (answerY - offset) + 'px;';
+		       charBox.style.cssText = 'position: absolute; width: 50px; height: 100px; border: 5px solid red;' + getX + getY;
+		       found.appendChild(charBox);
+		   }
+		  return;
+	       }
+	   }
+	});
 	dropdown.appendChild(charBtn);
     }
     target.appendChild(dropdown);
@@ -126,7 +164,7 @@ function setUp() {
     makeTimer(content);
 
     makeTarget(content);
-
+    
     addPic();
 }
 
@@ -139,14 +177,17 @@ function start() {
     var start = document.getElementById('start');
     start.style.display = 'none';
     
-     var ref = database.ref('locations/waldo');
-     ref.once('value')
+     var query = database.ref('locations');
+     query.once('value')
         .then(function(snapshot) {
-	    console.log('snapshot: ' + snapshot);
+	    snapshot.forEach(function (childSnapshot) {
+		  var key = childSnapshot.key;
+		  var childData = childSnapshot.val();
+		  const data = charLocation(key, childData.xPos, childData.yPos);
+		  locations.push(data);
+	    });
 	});
-    
     stopwatch = new Stopwatch();
-
     stopwatch.onTime(updateTimeDisplay);
     stopwatch.start();
     

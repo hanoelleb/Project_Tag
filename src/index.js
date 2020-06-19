@@ -1,15 +1,16 @@
-import './style.css';
-import pic from './resources/waldo.jpg';
 import * as firebase from 'firebase';
 
+//main picture
+import pic from './resources/waldo.jpg';
+
+//modules/factories
 import {charLocation} from './location';
+import {Game} from './game';
+import {makeCharacterBanner, makeTimer, disableButton, createMarker, highScorePopUp, displayScores} from './DOM';
 
-import waldo from './resources/waldo.png';
-import wilma from './resources/wilma.png';
-import odlaw from './resources/odlaw.png';
-import wizard from './resources/wizard.png';
-import woof from './resources/woof.png';
+import './style.css';
 
+//installations
 var Stopwatch = require('timer-stopwatch');
 
 var app = firebase.initializeApp({ 
@@ -36,7 +37,7 @@ function addPic() {
     
     var img = document.createElement('img');
     img.id = 'page';
-    img.style.cssText = 'z-index: 5';
+    img.style.cssText = 'z-index: 1';
     img.src = pic;
     img.addEventListener('click', photoClick);
     content.appendChild(img);
@@ -54,44 +55,6 @@ function photoClick(e) {
     
     currentX = xPos;
     currentY = yPos;
-}
-
-function makeCharacterBanner(container) {
-     var characterBanner = document.createElement('div');
-     characterBanner.style.cssText = 'display: flex; position: fixed; background-color: white; border: 5px red solid;';
-
-     var images = [waldo, wilma, odlaw, wizard, woof];
-     var names =  ['Waldo', 'Wilma', 'Odlaw', 'Wizard', 'Woof'];
-
-     for (var i = 0; i < images.length; i++) {
-          var icon = document.createElement('figure');
-	  var img = document.createElement('img');
-	  img.src = images[i];
-            
-	  var cap = document.createElement('figcaption');
-	  cap.innerHTML = names[i];
-
-	  icon.appendChild(img);
-	  icon.appendChild(cap);
-
-	  characterBanner.appendChild(icon);
-     }
-
-     container.appendChild(characterBanner);
-}
-
-function makeTimer(container) {
-    var timer = document.createElement('div');
-    timer.style.cssText = 'position: fixed; left: 75vw; width: 20vw; height: 8vw; float: right; color: white;' + 
-		'background-color: red; border: 5px white solid; display: flex; justify-content: center; align-items: center;'
-
-    var time = document.createElement('span');
-    time.id = 'time';
-    time.style.fontSize = '200%';
-    time.innerHTML = '0:00';
-    timer.appendChild(time);
-
-    container.appendChild(timer);
 }
 
 function makeTarget(container) {
@@ -117,7 +80,6 @@ function makeTarget(container) {
 	//todo: add button functionality/event listener
 	charBtn.addEventListener('click', () => {
 	   var lookup = names[index].toLowerCase();
-	   console.log('lookup: ' + lookup);
 	   for (var i = 0; i < locations.length; i++) {
 	       if (lookup === locations[i].name) {
 		   const offset = 40;
@@ -127,22 +89,18 @@ function makeTarget(container) {
 		   var x = Math.abs(currentX - answerX);
 		   var y = Math.abs(currentY - answerY);
 
-		   console.log('answer: ' + answerX + ' current: ' + currentX + ' x: ' + x);
-
 		   if (x <= 25 && y <= 50) {
-		       console.log('found ' + lookup);
-		       document.getElementById(lookup+'btn').style.display = 'none';
-
-		       var found = document.createElement('div');
-                       document.getElementById('content').appendChild(found);
-
-		       var charBox = document.createElement('div');
-		       charBox.id = lookup+'found';
-		    
-		       var getX = 'left: ' + (answerX - offset) + 'px;';
-		       var getY = 'top: ' + (answerY - offset) + 'px;';
-		       charBox.style.cssText = 'position: absolute; width: 50px; height: 100px; border: 5px solid red;' + getX + getY;
-		       found.appendChild(charBox);
+		       Game.foundCharacter();
+                       if (Game.isFinished()){
+		           stopwatch.stop();
+			   let gotHighScore = Game.checkScore(stopwatch.ms/1000);
+                           if (gotHighScore) {
+			       var form = highScorePopUp();
+                               form.addEventListener('submit', submitForm);
+			   }
+		       }
+                       disableButton(lookup);
+	               createMarker(lookup, (answerX-offset), (answerY-offset));
 		   }
 		  return;
 	       }
@@ -154,6 +112,30 @@ function makeTarget(container) {
 
     container.appendChild(target);
 
+}
+
+function submitForm(e) {
+    e.preventDefault()
+    var form = document.getElementById('scoreForm');
+    var name = form.childNodes[0].value;
+    console.log(name + ' with time: ' + (stopwatch.ms / 1000));
+    const newScores = Game.enterHighScore(name, stopwatch.ms/ 1000);
+    document.getElementById('highscore').style.display = 'none';
+    updateScores(newScores);
+    displayScores(newScores);
+    //todo: display high scores after update
+}
+
+function updateScores(scoreList) {
+    var scoresRef = [];
+
+    for (let i = 0; i < scoreList.length; i++) {
+	const user = scoreList[i].user;
+	const score = scoreList[i].score;
+        database.ref('scores/' + user).set({
+            score
+        });
+    }
 }
 
 function setUp() {
@@ -187,6 +169,21 @@ function start() {
 		  locations.push(data);
 	    });
 	});
+
+    var count = 0;
+    var scoreQuery = database.ref('scores');
+    scoreQuery.once('value')
+        .then(function(snapshot) {
+	    snapshot.forEach(function (childSnapshot) {
+                  var key = childSnapshot.key;
+                  var childData = childSnapshot.val().score;
+		  if (count < 10) {
+		      Game.addScore(key, childData);
+                      count++;
+		  } 
+            });
+	});
+
     stopwatch = new Stopwatch();
     stopwatch.onTime(updateTimeDisplay);
     stopwatch.start();
